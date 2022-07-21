@@ -100,7 +100,6 @@ public class LockManager {
             else{
                 transactionLocks.put(transNum, new ArrayList<Lock>(){{add(lock);}});
             }
-            return;
         }
 
         /**
@@ -113,7 +112,6 @@ public class LockManager {
             locks.remove(lock);
             transactionLocks.get(transNum).remove(lock);//map的get返回引用
             processQueue();
-            return;
         }
 
         /**
@@ -128,7 +126,6 @@ public class LockManager {
             else{
                 waitingQueue.addLast(request);
             }
-            return;
         }
 
         /**
@@ -154,7 +151,6 @@ public class LockManager {
                     break;
                 }
             }
-            return;
         }
 
         /**
@@ -229,13 +225,15 @@ public class LockManager {
                 throw new DuplicateLockRequestException("");
             }
             if(entry.checkCompatible(lockType, transNum)){
-                entry.grantOrUpdateLock(currLock);
                 for(ResourceName releaseName: releaseNames){
                     ResourceEntry releasedEntry = getResourceEntry(releaseName);
-                    if(releasedEntry.getTransactionLockType(transNum) == lockType.NL){
+                    if(releasedEntry.getTransactionLockType(transNum) == lockType.NL) {
                         throw new NoLockHeldException("");
                     }
-                    if(releaseName == name) continue;//更新的时候要跳过                    
+                }
+                entry.grantOrUpdateLock(currLock);
+                for(ResourceName releaseName: releaseNames){
+                    if(releaseName == name) continue;//更新的时候要跳过
                     release(transaction, releaseName);
                 }
             }
@@ -325,7 +323,6 @@ public class LockManager {
             else{
                 Lock lock = new Lock(name, entry.getTransactionLockType(transNum), transNum);
                 entry.releaseLock(lock);
-                entry.processQueue();
             }
         }
     }
