@@ -281,7 +281,7 @@ public class LockManager {
             Lock addLock = new Lock(name, lockType, transNum);
             ResourceEntry entry = getResourceEntry(name);
 
-            if(entry.getTransactionLockType(transNum) == lockType){
+            if(entry.getTransactionLockType(transNum) != LockType.NL){
                 throw new DuplicateLockRequestException("");
             }
             if(entry.checkCompatible(lockType, transNum) && entry.waitingQueue.isEmpty()){
@@ -366,7 +366,7 @@ public class LockManager {
             if(oldType == LockType.NL){
                 throw new NoLockHeldException("");
             }
-            if(!(LockType.substitutable(newLockType, oldType) && newLockType != oldType)){
+            if(!(LockType.substitutable(newLockType, oldType))){
                 throw new InvalidLockException("");
             }
 
