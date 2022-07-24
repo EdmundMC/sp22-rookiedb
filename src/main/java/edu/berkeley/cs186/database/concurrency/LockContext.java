@@ -169,16 +169,20 @@ public class LockContext {
             if (this.hasSIXAncestor(transaction)) {
                 throw new InvalidLockException("");
             }
-            //clear S and IS descendants
+            if(this.getExplicitLockType(transaction) == null) {
+                throw new NoLockHeldException("");
+            }
+            if(!LockType.substitutable(newLockType, getExplicitLockType(transaction))){
+                throw new InvalidLockException("");
+            }
+            //release S and IS descendants
             //update numChildLock
-            synchronized (this) {
-                this.lockman.promote(transaction, this.getResourceName(), newLockType);
-                List<ResourceName> sisResourceName = this.sisDescendants(transaction);
-                for (ResourceName name : sisResourceName) {
-                    LockContext childContext = this.childContext(name.toString());
-                    childContext.lockman.release(transaction, name);
-                    childContext.parentContext().updateAncestorNumChildLocks(transaction, -1);
-                }
+            List<ResourceName> sisResourceName = this.sisDescendants(transaction);
+            sisResourceName.add(this.getResourceName());
+            this.lockman.acquireAndRelease(transaction, this.getResourceName(), newLockType, sisResourceName);
+            for (ResourceName name : sisResourceName) {
+                LockContext childContext = this.childContext(name.toString());
+                childContext.parentContext().updateAncestorNumChildLocks(transaction, -1);
             }
         } else this.lockman.promote(transaction, this.getResourceName(), newLockType);
     }
@@ -226,36 +230,26 @@ public class LockContext {
         List<ResourceName> releaseNames;
         LockType currType = this.getExplicitLockType(transaction);
 
-        if (numChildren == 0) {
-            if (currType == LockType.NL) {
-                throw new NoLockHeldException("");
-            }
-            if (currType != LockType.S && currType != LockType.X) {
-                if (currType == LockType.IS) {
-                    this.lockman.promote(transaction, this.name, LockType.S);
-                } else {
-                    this.lockman.promote(transaction, this.name, LockType.X);
-                }
-            }
-            return;
+        if (numChildren == 0 && currType == LockType.NL) {
+            throw new NoLockHeldException("");
         }
-
-        if (numChildren == this.sisDescendants(transaction).size()) {
+        if(currType == LockType.S ||currType == LockType.X) return;
+        if (numChildren == this.sisDescendants(transaction).size() && (currType == LockType.NL ||currType == LockType.IS)) {
             //all locks of descendants are S/IS
             releaseNames = this.sisDescendants(transaction);
+            if(currType != LockType.NL) releaseNames.add(this.getResourceName());
             this.lockman.acquireAndRelease(transaction, this.name, LockType.S, releaseNames);
         } else {
             //some locks of descendants are X/IX/SIX
             releaseNames = this.lockDescendants(transaction);
+            if(currType != LockType.NL) releaseNames.add(this.getResourceName());
             this.lockman.acquireAndRelease(transaction, this.name, LockType.X, releaseNames);
         }
         //update numChildLocks
         for (ResourceName name : releaseNames) {
+            if(name == this.getResourceName() && this.parentContext() == null) continue;
             LockContext childContext = this.childContext(name.toString());
             childContext.parentContext().updateAncestorNumChildLocks(transaction, -1);
-        }
-        if(currType == LockType.NL && this.parentContext() != null){
-            this.parentContext().updateAncestorNumChildLocks(transaction, -1);
         }
     }
 
